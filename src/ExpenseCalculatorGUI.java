@@ -1,11 +1,12 @@
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.Scanner;
 import javax.swing.*;
 
 public class ExpenseCalculatorGUI extends JFrame{
@@ -15,6 +16,7 @@ public class ExpenseCalculatorGUI extends JFrame{
 
     private JPanel friendsPanel;
     private JPanel expensesPanel;
+    private JTextArea outputArea;
 
     
     public ExpenseCalculatorGUI(){
@@ -47,16 +49,37 @@ public class ExpenseCalculatorGUI extends JFrame{
         expenseSection.add(addExpenseBtn, BorderLayout.SOUTH);
 
 
+        // ==== OUTPUT SECTION
+        JButton calculateBtn = new JButton("Calculate Balance");
+        outputArea = new JTextArea();
+        outputArea.setEditable(false);
+        outputArea.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        outputArea.setLineWrap(false);
+
+        JScrollPane outputScroll = new JScrollPane(outputArea,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        
+        outputScroll.setPreferredSize(new Dimension(800, 300));
+
         // Main Layout
         JPanel topPanel = new JPanel(new GridLayout(1, 2, 10, 10));
         topPanel.add(friendSection);
         topPanel.add(expenseSection);
+
         JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
+        bottomPanel.add(calculateBtn, BorderLayout.NORTH);
+        bottomPanel.add(outputScroll, BorderLayout.CENTER);
 
         // Split Panel
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topPanel, bottomPanel);
+        splitPane.setResizeWeight(0.5);
+        splitPane.setDividerLocation(350);
 
-        add(splitPane);
+        add(splitPane, BorderLayout.CENTER);
+
+        calculateBtn.addActionListener(e -> calculateExpenses());
+
     }
 
     private void addFriendRow(String defaultName){
@@ -97,46 +120,24 @@ public class ExpenseCalculatorGUI extends JFrame{
 
 
 
-    // TODO: Pick up values from GUI
     private void calculateExpenses(){   // to be modified 
-
-        Scanner sc = new Scanner(System.in);
-        System.out.print("Enter number of friends: ");
-        int numFriends = sc.nextInt();
-        sc.nextLine();
-
-        List<String> friends = new ArrayList<>(); // Empty arraylist
-        for(int i = 0; i < numFriends; i++){
-            System.out.print("Enter friend " + (i + 1) + " name: ");
-            friends.add(sc.nextLine().trim());
+        List<String> friends = getFriendNames();
+        if(friends.isEmpty()){
+            outputArea.setText("Please add at least one friend");
+            return;
         }
 
-        System.out.print("Enter number of expense records: ");
-        int numRecords = sc.nextInt();  // number of purchase entries
-        sc.nextLine();
-
-        String[] payers = new String[numRecords];
-        double[] amounts = new double[numRecords];
-
-        for (int i = 0; i < numRecords; i++) {
-            System.out.println("Record " + (i + 1) + ":");
-            System.out.print("  Who paid? ");
-            payers[i] = sc.nextLine().trim();
-            System.out.print("  How much? ");
-            amounts[i] = sc.nextDouble();
-            sc.nextLine(); // consume newline
-        }
-
+        // Initialize Balances
         HashMap<String, Double> balances = new HashMap<>();
         for(String friend : friends){
             balances.put(friend, 0.0);
         }
-        System.out.println(balances);
 
-        for(int day = 0; day < numRecords; day++){
+        // Processe each expense
+        for(ExpenseRow row : expenseRows){
             // retrieve the total and the payer for each day
-            String payer = payers[day];
-            double total = amounts[day]; 
+            String payer = row.getPayer();
+            double total = row.getAmount(); 
             double share = total / friends.size();
 
             for(String friend : friends){
@@ -149,16 +150,22 @@ public class ExpenseCalculatorGUI extends JFrame{
             }
         }
 
-        System.out.println("Net Balances: ");
+        StringBuilder sb = new StringBuilder();
+        sb.append("==== NET BALANCES ====\n");
         for(String friend : friends){
-            System.out.println(friend + " " + balances.get(friend));
+            sb.append(String.format("%s: %.2f\n", friend, balances.get(friend)));
         }
 
-        System.out.println("Simplified Debts");
-        simplifyDebts(balances);
+        // System.out.println("Simplified Debts");
+        // simplifyDebts(balances);
+
+        sb.append("==== Simplified Debts ====\n");
+        sb.append(simplifyDebts(balances));
+
+        outputArea.setText(sb.toString());
     }
 
-    private static void simplifyDebts(HashMap <String, Double> balances){
+    private String simplifyDebts(HashMap <String, Double> balances){
         // Find the largest creditor, and smallest debtor and pay out (repeat)
         PriorityQueue <Person> creditors = new PriorityQueue<>((a,b) -> Double.compare(b.amount, a.amount)); 
         PriorityQueue <Person> debtors = new PriorityQueue<>((a,b) -> Double.compare(a.amount, b.amount));
@@ -175,12 +182,13 @@ public class ExpenseCalculatorGUI extends JFrame{
             }
         }
 
+        StringBuilder sb = new StringBuilder();
         while(!creditors.isEmpty() && !debtors.isEmpty()){
             Person creditor = creditors.poll();
             Person debtor = debtors.poll();
 
             double min = Math.min(creditor.amount, debtor.amount);
-            System.out.printf("%s owes %s: $%.2f\n", debtor.name, creditor.name, min);
+            sb.append(String.format("%s owes %s: $%.2f\n", debtor.name, creditor.name, min));
 
             if(creditor.amount > min){
                 creditors.offer(new Person(creditor.name, creditor.amount - min));
@@ -189,6 +197,8 @@ public class ExpenseCalculatorGUI extends JFrame{
                 debtors.offer(new Person(debtor.name, debtor.amount - min));
             }
         }
+
+        return sb.toString();
 
     }
 
@@ -244,5 +254,9 @@ public class ExpenseCalculatorGUI extends JFrame{
         }
 
     }
+
+
+    // Description, Payer, $100
+
 
 }
